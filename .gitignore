@@ -1,0 +1,24 @@
+# Secrets — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Misc
+.DS_Store
+*.log
+
+# swap-engine risk ledger
+.state/
+
+# skills
+.agents/
+.claude/
+.continue/
+skills-lock.json

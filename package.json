@@ -1,0 +1,28 @@
+{
+  "name": "bianca-markets",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bianca Markets — autonomous FX/macro trading agent on Celo (FinCare / Bianca). Celo Agentic Payments & DeFAI Hackathon 2026.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "agent": "npm run build && node apps/agent/dist/index.js",
+    "agent:dev": "tsx apps/agent/src/index.ts",
+    "proxy": "npm run build && node apps/data-proxy/dist/index.js",
+    "proxy:dev": "tsx apps/data-proxy/src/index.ts",
+    "test": "node --test --import tsx packages/*/test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

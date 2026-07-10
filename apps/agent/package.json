@@ -1,0 +1,15 @@
+{
+  "name": "@bianca/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "dependencies": {
+    "@bianca/config": "*",
+    "@bianca/market-data": "*",
+    "@bianca/signal-engine": "*",
+    "@bianca/swap-engine": "*",
+    "@bianca/x402-payments": "*",
+    "viem": "^2.21.0"
+  }
+}

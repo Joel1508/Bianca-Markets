@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/config" },
+    { "path": "../../packages/signal-engine" },
+    { "path": "../../packages/market-data" },
+    { "path": "../../packages/x402-payments" }
+  ]
+}

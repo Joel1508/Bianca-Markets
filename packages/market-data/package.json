@@ -1,0 +1,21 @@
+{
+  "name": "@bianca/market-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@bianca/signal-engine": "*",
+    "sentiment": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/sentiment": "^5.0.4"
+  }
+}
