@@ -406,6 +406,144 @@ explicit approval.
 Pre-registration blockers: public GitHub repo (repo has ZERO commits —
 initial commit + push needed; repo slug determines the tag, choose once).
 
+## 2026-07-11 — agentWallet fix prepped; launchd LIVE; multi-code engine
+
+1. **8004scan "AGENT WALLET" mystery solved.** The field renders the
+   registry's on-chain metadata key `agentWallet`, which `register()`
+   auto-sets to the registering (owner) wallet — NOT the registration JSON
+   (our `services[]` wallet entry is ignored for it). It is a RESERVED key:
+   plain `setMetadata` reverts "reserved key"; the fix is
+   `setAgentWallet(agentId, newWallet, deadline, signature)` sent by the
+   OWNER, where `signature` is an EIP-712 `AgentWalletSet` proof from the
+   NEW wallet (domain `ERC8004IdentityRegistry` v1, chain 42220, verifying
+   contract = proxy) and `deadline` ≤ now+5min. Hackathon tracking does NOT
+   use this field (leaderboard = assigned attributionTag + the submission's
+   own `agentWalletAddress`); fixing is for correctness/8004scan score.
+   `scripts/set-agent-wallet.ts` signs with the trading wallet key from
+   `.env`, simulates from the owner, prints Celoscan Write-as-Proxy params
+   AND raw calldata — re-run at send time (expires in ~4.5 min).
+   **LANDED**: user sent via Celoscan, tx `0xa4cea3bb…fe5f53` (block
+   71879903, success); `getAgentWallet(9660)` returns 0xd16f…7D7E and
+   8004scan re-indexed within minutes.
+2. **Hourly loop moved to launchd** (survives chat sessions/terminals).
+   `ops/launchd/` plists installed to `~/Library/LaunchAgents/`:
+   data-proxy (KeepAlive, RunAtLoad) + agent-cycle (:07 hourly). Both run
+   prebuilt `dist/` directly (no unattended builds), WorkingDirectory =
+   repo root (dotenv), logs `~/Library/Logs/bianca-markets/*.log`.
+   Plist env pins CELO_NETWORK=mainnet (overrides `.env`'s sepolia) and
+   DRY_RUN=true (agent job — hard pin; real swaps stay per-tx in chat).
+   Verified: proxy settle-mode on 4021; kickstarted cycle settled 3/3
+   mainnet x402 payments (FLAT signal, no trade). After code changes:
+   `npm run build` + `launchctl kickstart -k gui/$UID/<label>`.
+   Cost: ~0.36 USDC/day agent→payTo + ~$0.072/day facilitator credits;
+   agent USDC (~3.4) ≈ 9 days runway — top-up pending.
+3. **Swap engine emits multiple ERC-8021 codes** (24/24 tests):
+   `ATTRIBUTION_CODE` env is now comma-separated → `ATTRIBUTION_CODES`;
+   suffix = `toDataSuffix(codes)`.
+4. **Celo Builders REGISTERED — assigned tag `celo_2f10863ce6f7`** (locked
+   to repo slug Joel1508/Bianca-Markets). Draft saved: project "Bianca
+   Markets", tracks most-revenue-generated + most-x402-payments, telegram
+   @Joel28041. Connection credential in `.state/celobuilders-connection.json`
+   (gitignored). `.env` now has
+   `ATTRIBUTION_CODE=bianca_markets,celo_2f10863ce6f7`; verified the
+   launchd-run dist picks it up at process start (config/dotenv imports
+   before swap-engine — no rebuild/kickstart needed for .env changes; the
+   long-running data-proxy doesn't use it). All swaps from now on carry
+   BOTH codes. Publish still pending (needs X post link, 8004scan URL,
+   agentWalletAddress = 0xd16f…7D7E per user decision, celo-mainnet) —
+   only after explicit user approval, before 2026-07-20 09:00 UTC.
+
+## 2026-07-11 (later) — RPC resilience after sleep/wake failures
+
+The 15:07 and 16:07 UTC launchd cycles died on the startup `eth_blockNumber`
+probe (timeout, then `fetch failed`) with zero x402 payments made. NOT Forno
+rate limiting — `pmset -g log` showed the Mac was on battery, lid closed,
+sleeping through both fire times; launchd coalesced the missed job and ran
+it seconds after lid-open, before Wi-Fi was back. Fixes (31/31 tests):
+
+- `packages/config/src/retry.ts` — `withRetries` (default 5 attempts /
+  15s fixed backoff, injectable sleep for tests); agent wraps the startup
+  RPC probe with it and logs each retry.
+- `getRpcUrls()` + viem `fallback()` transport in both clients: Forno
+  primary → `https://1rpc.io/celo` backup (probed: chain 42220, ~0.5s;
+  dRPC was slow, publicnode dead). Overrides: `CELO_MAINNET_RPC_BACKUP` /
+  `CELO_SEPOLIA_RPC_BACKUP` (sepolia has no default backup). Per-transport
+  retryCount 3, timeout 15s.
+- Rebuilt; both launchd jobs kickstarted on the new build — verified cycle:
+  3/3 payments settled, FLAT, no trade.
+- User accepts the residual risk: fully-asleep hours still skip (launchd
+  can't wake the Mac); they run `sudo pmset -c sleep 0` and keep the Mac
+  plugged in + lid open when the loop should run continuously.
+
+## 2026-07-11 (evening) — x402 cycle failures: flapping local network; hardening shipped
+
+From ~17:00 UTC, agent cycles began dying with proxy 502 `fetch failed`.
+Investigation trail (each step disproving the previous theory): not launchd
+(shell proxy failed identically), not the facilitator being down (settles
+succeeded seconds before failures; /supported 200), not IPv6 ordering, not
+config. Decisive evidence: interleaved sequential probes saw
+api.x402.celo.org (DigitalOcean) AND forno.celo.org (Cloudflare) hang
+SIMULTANEOUSLY while TradingView succeeded; hangs never complete (45s+);
+failure rate oscillates 0%↔50% in waves. **Root cause: the local network
+intermittently drops new outbound connections in bursts.** Parallel
+request bursts made it look concurrency-related early on.
+
+Hardening shipped (user-approved, 33/33 tests):
+- `generateSignal` pulls the three sources SEQUENTIALLY (was Promise.all)
+  — one paid request in flight at a time; test asserts max-in-flight = 1.
+- `FacilitatorClient.verify` retries (3×, 2s) — read-only, safe.
+  **`settle` is NEVER retried** (ambiguous failure + blind retry = possible
+  double-charge; losing a cycle is the cheaper error). Both calls now have
+  a 15s AbortSignal timeout so dead connections fail instead of hanging.
+- Proxy retries `route.fetch()` upstream pulls (3×, 2s) so a blip doesn't
+  waste an already-settled payment.
+
+Verified during a bad wave: cycle settled gold + calendar (txs
+0xd212c9b4…, 0x0ee971fe… — calendar also rode the TradingView→ForexFactory
+fallback) before dying on /news — vs all-or-nothing before. Settled
+payments still count on-chain for Track 2 even when the cycle dies; only
+the signal is lost. Known gap (needs approval if wanted): the agent aborts
+the cycle on the first failed endpoint — per-source fallback to direct
+upstreams would let cycles complete through waves. Real fix is the
+network itself (flapping started ~17:00 UTC; suggest router/Wi-Fi check,
+ethernet, or different network to confirm).
+
+## 2026-07-13 — facilitator relayer out of gas (external, no code fix)
+
+Resumed after ~2 days away. 42 hourly cycles had fired: network flapping
+from the prior incident continued a while then cleared (RPC/most endpoints
+fine since); but for the last ~13 cycles EVERY one died identically on the
+first paid pull (`/gold`, first in sequential order) with `HTTP 402:
+Settlement failed: unexpected_error`. No LONG/SHORT signal ever appeared in
+any of the 42 cycles — nothing was waiting on a trade approval.
+
+Diagnosis (bypassed the proxy, called the facilitator directly): `/verify`
+returns `isValid:true` (our signed EIP-3009 authorization is fully valid —
+not our bug), but `/settle` returns `errorReason:"unexpected_error"` with
+the real cause in `errorMessage`: **`insufficient funds for gas * price +
+value: balance 17734755326363902, tx cost 34711295454932220`** — the
+FACILITATOR's own relayer wallet is out of CELO gas (needs ~0.035 CELO,
+has ~0.018). Confirmed sustained, not transient (identical balance 15s
+later). Tested standalone: right now ALL THREE endpoints fail this way,
+not just gold — the "always gold" pattern in the log is an artifact of
+gold firing first and the cycle aborting on first failure.
+
+**Nothing to fix in this repo** — our wallet is healthy (3.12 USDC, 22.4
+CELO gas), our payloads are valid, the outage is 100% on
+`api.x402.celo.org`'s infrastructure. Confirms the earlier no-retry-on-
+settle decision was correct: retrying here would just burn attempts
+against a permanently-empty relayer, never succeed. No public status page
+or hackathon FAQ mentions this (checked). Recovery requires the
+facilitator ops team to top up their relayer — cycles will resume
+settling automatically once that happens, no changes needed on our side.
+Worth flagging in the hackathon Telegram since every team routing x402
+through this shared facilitator likely hits the same wall.
+
+**Diagnostic signature for next time:** `/verify` succeeds + `/settle`
+`errorMessage` contains "insufficient funds for gas" = facilitator-side
+gas outage, not ours — check directly against `api.x402.celo.org` instead
+of re-debugging the local stack.
+
 ## Standing rules
 
 - Never ask for the private key in chat — local `.env` only (gitignored).

@@ -26,8 +26,21 @@ export { fromDataSuffix };
  * leaderboard.
  */
 
-/** ERC-8021 code for this project (regex: /^[a-z0-9_]{1,32}$/). */
-export const ATTRIBUTION_CODE = process.env.ATTRIBUTION_CODE ?? 'bianca_markets';
+/**
+ * ERC-8021 codes for this project (regex per code: /^[a-z0-9_]{1,32}$/).
+ * ATTRIBUTION_CODE env accepts a comma-separated list: leaderboards only
+ * credit the Celo Builders-assigned tag, so our own code rides alongside it
+ * in the same suffix (ERC-8021 carries multiple codes).
+ */
+export const ATTRIBUTION_CODES: readonly string[] = (
+  process.env.ATTRIBUTION_CODE ?? 'bianca_markets'
+)
+  .split(',')
+  .map((code) => code.trim())
+  .filter(Boolean);
+
+/** display form for logs */
+export const ATTRIBUTION_CODE = ATTRIBUTION_CODES.join(',');
 
 export interface TokenRef {
   symbol: string;
@@ -63,7 +76,7 @@ export interface SwapOptions {
   walletClient?: WalletClient<any, Chain, Account>;
   /** default 50 (0.5%) */
   slippageBps?: number;
-  attributionCode?: string;
+  attributionCodes?: readonly string[];
 }
 
 /**
@@ -94,7 +107,7 @@ export async function executeSwap(intent: SwapIntent, opts: SwapOptions): Promis
   const { network, tokenIn, tokenOut, amountIn } = intent;
   const { dryRun, publicClient } = opts;
   const slippageBps = opts.slippageBps ?? Number(process.env.SWAP_SLIPPAGE_BPS ?? 50);
-  const attributionTag = toDataSuffix(opts.attributionCode ?? ATTRIBUTION_CODE);
+  const attributionTag = toDataSuffix(opts.attributionCodes ?? ATTRIBUTION_CODES);
 
   const exchangeId = await findExchangeId(publicClient, network, tokenIn.address, tokenOut.address);
   const quote = await getQuote(

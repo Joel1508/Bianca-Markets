@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hourly agent cycle: 3 real x402 data payments + signal + DRY-RUN swap.
+       One-shot process; launchd fires it at :07 every hour. -->
+  <key>Label</key>
+  <string>com.bianca-markets.agent-cycle</string>
+
+  <!-- Runs the prebuilt bundle directly; rebuild manually after code changes
+       (npm run build). No build at fire time, so an in-progress working
+       tree can never be compiled and executed unattended. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>apps/agent/dist/index.js</string>
+  </array>
+
+  <!-- dotenv loads .env from here; PRIVATE_KEY etc. never appear in this file. -->
+  <key>WorkingDirectory</key>
+  <string>/Users/joelalfonso/bianca-markets</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Explicit network pin, same rationale as the proxy plist. -->
+    <key>CELO_NETWORK</key>
+    <string>mainnet</string>
+    <!-- Hard safety pin for unattended runs: even if .env is ever flipped
+         to DRY_RUN=false for an approved manual send, the launchd job
+         stays dry-run. Real swaps remain per-tx-approved in chat only. -->
+    <key>DRY_RUN</key>
+    <string>true</string>
+  </dict>
+
+  <!-- :07 every hour (keeps the cadence of the old session-local watch).
+       Note: launchd coalesces runs missed during sleep into ONE run on wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Minute</key>
+    <integer>7</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/joelalfonso/Library/Logs/bianca-markets/agent-cycle.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/joelalfonso/Library/Logs/bianca-markets/agent-cycle.log</string>
+</dict>
+</plist>

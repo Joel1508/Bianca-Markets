@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- x402 paid data proxy: persistent, restarted by launchd if it dies. -->
+  <key>Label</key>
+  <string>com.bianca-markets.data-proxy</string>
+
+  <!-- Runs the prebuilt bundle directly (no npm, no build step at launch).
+       After code changes: npm run build, then
+       launchctl kickstart -k gui/$UID/com.bianca-markets.data-proxy -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>apps/data-proxy/dist/index.js</string>
+  </array>
+
+  <!-- dotenv loads .env from here; PRIVATE_KEY etc. never appear in this file. -->
+  <key>WorkingDirectory</key>
+  <string>/Users/joelalfonso/bianca-markets</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Explicit network pin: .env still says sepolia; this overrides it
+         (dotenv does not overwrite pre-set env vars). Hackathon counting
+         is mainnet-only. Remove this key to fall back to .env. -->
+    <key>CELO_NETWORK</key>
+    <string>mainnet</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <!-- Back off 15s between restarts (e.g. if port 4021 is taken). -->
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/joelalfonso/Library/Logs/bianca-markets/data-proxy.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/joelalfonso/Library/Logs/bianca-markets/data-proxy.log</string>
+</dict>
+</plist>

@@ -1,4 +1,5 @@
-export { CHAINS, getRpcUrl } from './chains.js';
+export { CHAINS, getRpcUrl, getRpcUrls } from './chains.js';
+export { withRetries, type RetryOptions } from './retry.js';
 export {
   loadConfig,
   requirePrivateKey,

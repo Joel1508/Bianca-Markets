@@ -81,3 +81,33 @@ test('X402Client signs a payment for a throwaway key (offline)', async () => {
   // instead verify the client exposes the right address for logging
   assert.equal(client.address, account.address);
 });
+
+test('facilitator /verify retries transient failures; /settle never retries', async (t) => {
+  const realFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+  const payload = {} as PaymentPayload;
+  const requirements = {} as PaymentRequirements;
+  const client = new FacilitatorClient('https://facilitator.invalid', 'key', {
+    sleep: async () => {},
+  });
+
+  let verifyCalls = 0;
+  globalThis.fetch = (async () => {
+    verifyCalls++;
+    if (verifyCalls < 3) throw new TypeError('fetch failed');
+    return new Response(JSON.stringify({ isValid: true }));
+  }) as typeof fetch;
+  const res = await client.verify(payload, requirements);
+  assert.equal(verifyCalls, 3);
+  assert.deepEqual(res, { isValid: true });
+
+  let settleCalls = 0;
+  globalThis.fetch = (async () => {
+    settleCalls++;
+    throw new TypeError('fetch failed');
+  }) as typeof fetch;
+  await assert.rejects(client.settle(payload, requirements), /fetch failed/);
+  assert.equal(settleCalls, 1);
+});

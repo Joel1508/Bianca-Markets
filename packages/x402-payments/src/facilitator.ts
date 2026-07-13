@@ -1,4 +1,4 @@
-import type { CeloNetwork } from '@bianca/config';
+import { withRetries, type CeloNetwork, type RetryOptions } from '@bianca/config';
 import type {
   PaymentPayload,
   PaymentRequirements,
@@ -23,23 +23,39 @@ export class FacilitatorClient {
     private readonly baseUrl: string,
     /** required for /settle; /verify is open */
     private readonly apiKey?: string,
+    /** retry knobs for /verify (tests inject a no-op sleep) */
+    private readonly verifyRetry: RetryOptions = {},
   ) {}
 
   get canSettle(): boolean {
     return Boolean(this.apiKey);
   }
 
+  /**
+   * /verify is read-only, so it retries on transient failures (the hosted
+   * facilitator intermittently hangs/drops connections under concurrent
+   * load — observed 2026-07-11).
+   */
   async verify(
     paymentPayload: PaymentPayload,
     paymentRequirements: PaymentRequirements,
   ): Promise<VerifyResponse> {
-    return this.post<VerifyResponse>('/verify', {
-      x402Version: 1,
-      paymentPayload,
-      paymentRequirements,
-    });
+    return withRetries(
+      () =>
+        this.post<VerifyResponse>('/verify', {
+          x402Version: 1,
+          paymentPayload,
+          paymentRequirements,
+        }),
+      { attempts: 3, delayMs: 2_000, ...this.verifyRetry },
+    );
   }
 
+  /**
+   * /settle moves money and is NEVER retried: after an ambiguous failure
+   * (timeout, dropped connection) the settlement may have landed, and a
+   * blind retry risks paying twice. Losing the cycle is the cheaper error.
+   */
   async settle(
     paymentPayload: PaymentPayload,
     paymentRequirements: PaymentRequirements,
@@ -61,10 +77,13 @@ export class FacilitatorClient {
     body: unknown,
     headers: Record<string, string> = {},
   ): Promise<T> {
+    // Bound hung connections (observed 12s+ hangs) so verify can retry and
+    // settle fails fast instead of stalling the request forever.
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
     });
     const text = await res.text();
     try {

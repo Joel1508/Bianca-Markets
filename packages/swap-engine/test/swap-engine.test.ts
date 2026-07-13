@@ -102,6 +102,22 @@ test('attribution tag survives the calldata round-trip', () => {
   assert.equal(data.slice(0, 10).toLowerCase(), selector.toLowerCase());
 });
 
+test('multiple attribution codes survive the calldata round-trip', () => {
+  // own code + Celo Builders-assigned tag in one ERC-8021 suffix
+  const data = buildSwapCalldata(
+    'sepolia',
+    '0xacc988382b66ee5456086643dcfd9a5ca43dd8f428f6ef22503d8b8013bcffd7',
+    '0x01C5C0122039549AD1493B8220cABEdD739BC44E',
+    '0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b',
+    1_000_000n,
+    990_000_000_000_000_000n,
+    toDataSuffix(['bianca_markets', 'celo_0123456789ab']),
+  );
+  const decoded = fromDataSuffix(data);
+  assert.ok(decoded, 'tags must be recoverable from full calldata');
+  assert.deepEqual(decoded.codes, ['bianca_markets', 'celo_0123456789ab']);
+});
+
 test('swapIn calldata grows by exactly the suffix size', () => {
   const suffix = toDataSuffix('bianca_markets');
   const bare = buildSwapCalldata(

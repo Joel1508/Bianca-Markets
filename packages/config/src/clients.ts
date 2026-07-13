@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  fallback,
   http,
   type PublicClient,
   type WalletClient,
@@ -8,13 +9,21 @@ import {
   type Chain,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { CHAINS, getRpcUrl } from './chains.js';
+import { CHAINS, getRpcUrls } from './chains.js';
 import { requirePrivateKey, type CeloNetwork } from './env.js';
+
+// Primary + backup RPCs behind viem's fallback(): a request that fails on
+// the primary (after its own retries) is transparently retried on the backup.
+function transportFor(network: CeloNetwork) {
+  return fallback(
+    getRpcUrls(network).map((url) => http(url, { retryCount: 3, timeout: 15_000 })),
+  );
+}
 
 export function getPublicClient(network: CeloNetwork): PublicClient {
   return createPublicClient({
     chain: CHAINS[network],
-    transport: http(getRpcUrl(network)),
+    transport: transportFor(network),
   });
 }
 
@@ -25,11 +34,11 @@ export function getPublicClient(network: CeloNetwork): PublicClient {
  */
 export function getWalletClient(
   network: CeloNetwork,
-): WalletClient<ReturnType<typeof http>, Chain, Account> {
+): WalletClient<ReturnType<typeof fallback>, Chain, Account> {
   const account = privateKeyToAccount(requirePrivateKey());
   return createWalletClient({
     account,
     chain: CHAINS[network],
-    transport: http(getRpcUrl(network)),
+    transport: transportFor(network),
   });
 }

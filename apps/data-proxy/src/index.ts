@@ -1,7 +1,7 @@
 import http from 'node:http';
 import type { Address } from 'viem';
 import { isAddress } from 'viem';
-import { loadConfig, TOKENS } from '@bianca/config';
+import { loadConfig, TOKENS, withRetries } from '@bianca/config';
 import { DirectMarketDataProvider } from '@bianca/market-data';
 import {
   FACILITATOR_URLS,
@@ -132,7 +132,10 @@ const server = http.createServer(async (req, res) => {
       );
     }
 
-    return json(200, await route.fetch(), extraHeaders);
+    // Upstream data fetches are read-only — retry transient failures so a
+    // blip doesn't waste the payment that was just settled above.
+    const payload = await withRetries(route.fetch, { attempts: 3, delayMs: 2_000 });
+    return json(200, payload, extraHeaders);
   } catch (err) {
     console.error(`[error] ${url.pathname}:`, err instanceof Error ? err.message : err);
     return json(502, { error: err instanceof Error ? err.message : 'upstream failure' });

@@ -7,6 +7,7 @@ import {
   requirePrivateKey,
   CHAINS,
   TOKENS,
+  withRetries,
   type AppConfig,
 } from '@bianca/config';
 import {
@@ -65,7 +66,16 @@ async function main() {
   console.log(`  wallet:   ${config.hasWallet ? 'configured' : 'not configured'}`);
 
   const client = getPublicClient(config.network);
-  const block = await client.getBlockNumber();
+  // Launchd fires coalesced cycles right after wake, before the network is
+  // up — give the RPC probe a few minutes before declaring the cycle dead.
+  const block = await withRetries(() => client.getBlockNumber(), {
+    attempts: 5,
+    delayMs: 15_000,
+    onRetry: (err, attempt, attempts) =>
+      console.log(
+        `  rpc:      probe failed (attempt ${attempt}/${attempts}: ${err instanceof Error ? err.message.split('\n')[0] : err}) — retrying in 15s`,
+      ),
+  });
   console.log(`  rpc ok:   latest ${chain.name} block ${block}`);
 
   const { provider, note } = chooseProvider(config);

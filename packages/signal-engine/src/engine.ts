@@ -51,11 +51,12 @@ export async function generateSignal(
     weights: { ...DEFAULT_SIGNAL_CONFIG.weights, ...overrides.weights },
   };
 
-  const [gold, calendar, news] = await Promise.all([
-    provider.getGoldPrice(),
-    provider.getMacroCalendar(),
-    provider.getNewsSentiment(),
-  ]);
+  // Sequential on purpose: parallel pulls burst connections at the x402
+  // facilitator and upstreams, which intermittently drop some of them
+  // (observed 2026-07-11) — one paid request in flight at a time.
+  const gold = await provider.getGoldPrice();
+  const calendar = await provider.getMacroCalendar();
+  const news = await provider.getNewsSentiment();
 
   const closes = gold.history.map((c) => c.close);
   const priceAction = priceActionScore(closes, cfg);

@@ -140,3 +140,24 @@ test('mock provider is reproducible per seed and signal is well-formed', async (
   assert.ok(['long', 'short', 'flat'].includes(a.direction));
   assert.equal(a.pair, 'XAUUSD');
 });
+
+test('generateSignal pulls data sequentially — never more than one in flight', async () => {
+  const mock = new MockMarketDataProvider(7);
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const track = <T>(fn: () => Promise<T>) => async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    const result = await fn();
+    inFlight--;
+    return result;
+  };
+  const provider: MarketDataProvider = {
+    getGoldPrice: track(() => mock.getGoldPrice()),
+    getMacroCalendar: track(() => mock.getMacroCalendar()),
+    getNewsSentiment: track(() => mock.getNewsSentiment()),
+  };
+  await generateSignal(provider);
+  assert.equal(maxInFlight, 1);
+});
